@@ -1,0 +1,96 @@
+---
+- name: Setup IIS Server
+  hosts: ifusion
+  gather_facts: yes
+  tasks:
+    - name: Install IIS Web-Server with all subfeatures and management tools
+      ansible.windows.win_feature:
+        name: Web-Server
+        state: present
+        include_sub_features: true
+        include_management_tools: true
+      register: iis_install
+
+    - name: Ensure IIS service is running and set to start automatically
+      ansible.windows.win_service:
+        name: W3SVC
+        state: started
+        start_mode: auto
+
+    - name: Restart the server if required by IIS installation
+      ansible.windows.win_reboot:
+      when: iis_install.reboot_required
+
+    - name: Reboot when Web-Server feature requires it
+      ansible.windows.win_reboot:
+      when: iis_install.reboot_required
+
+    - name: Ensure WinRM starts when the system has settled and is ready to work reliably
+      ansible.windows.win_service:
+        name: WinRM
+        start_mode: delayed
+
+    - name: Reboot a machine that takes time to settle after being booted
+      ansible.windows.win_reboot:
+        post_reboot_delay: 120
+
+    - name: Remove existing FTP binding
+      win_iis_webbinding:
+        name: 'DefaultSite'
+        state: absent
+        protocol: ftp
+        port: 80
+        ip: '192.168.3.64'
+
+    - name: Add HTTP binding
+      win_iis_webbinding:
+        name: 'DefaultSite'
+        state: present
+        protocol: http
+        port: 80
+        ip: '192.168.3.64'
+
+
+    - name: Copy application files to the server .NET SDK
+      win_copy:
+        src: /etc/ansible/playbooks2/dotnet-sdk-8.0.302-win-x64.exe
+        dest: C:\Users\Administrator
+        recurse: yes
+
+    - name: Install .NET SDK
+      win_package:
+        path: C:\Users\Administrator\dotnet-sdk-8.0.302-win-x64.exe
+        arguments: /quiet
+        state: present
+
+    - name: Copy application files to the server NDP
+      win_copy:
+        src: /etc/ansible/playbooks2/ndp471-kb4033344-web.exe
+        dest: C:\Users\Administrator
+        recurse: yes
+
+    - name: Install NDP
+      win_package:
+        path: C:\Users\Administrator\ndp471-kb4033344-web.exe
+        arguments: /quiet
+        state: present
+
+
+    - name: Copy application files to the server .NET HOSTING
+      win_copy:
+        src: /etc/ansible/playbooks2/dotnet-hosting-8.0.6-win.exe
+        dest: C:\Users\Administrator
+        recurse: yes
+
+    - name: Install .NET HOSTING
+      win_package:
+        path: C:\Users\Administrator\dotnet-hosting-8.0.6-win.exe
+        arguments: /quiet
+        state: present
+
+    - name: Copy application files to the server
+      win_copy:
+        src: /etc/ansible/playbooks2/publish/
+        dest: C:\inetpub\wwwroot\
+        recurse: yes
+
